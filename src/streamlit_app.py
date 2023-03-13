@@ -81,28 +81,15 @@ class c_model:
         return np.random.randint(2), np.random.rand()
 
 
-st.title('Comment Analysis')
-
-
-
-allowed_chars = ' AaBbCcDdEeFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz0123456789~`!@#$%^&*()-=_+[]{}|;:",./<>?'
-punct = '!?,.@#'
-maxlen = 80
-
-def preprocess(text):
-    return ''.join([' ' + char + ' ' if char in punct else char for char in [char for char in re.sub(r'http\S+', 'http', text, flags=re.MULTILINE) if char in allowed_chars]])[:maxlen]
-
-
-selected_model = st.radio(
-    'Choose model',
-    ['XLM-RoBERTa', 'ParsBERT', 'ALBERT'],
-    horizontal=True)
+st.title('Sentiment Analysis')
 
 
 # Load classification model
 with st.spinner('Loading classification model...'):
-    classifier = c_model()
-    model = classifier.load_model(selected_model)
+    from transformers import pipeline
+
+    checkpoint = "amir7d0/distilbert-base-uncased-finetuned-amazon-reviews"
+    classifier = pipeline("text-classification", model=checkpoint)
 
 
 tab1, tab2 = st.tabs(["Single Comment", "Multiple Comment"])
@@ -127,13 +114,12 @@ with tab1:
         with st.spinner('Predicting ...'):
             start_time = time.time()
             time.sleep(2)
-            preds, preds_prob = classifier.predict(text_input)
+            preds = classifier([text_input])[0]
             end_time = time.time()
             p_time = round(end_time-start_time, 2)
             st.success(f'Prediction finished in {p_time}s!')
 
-            label2id = {0: 'Positive', 1: 'Negative'}
-            st.write(f'Label: {label2id[preds]}, with certainty: {preds_prob}')
+            st.write(f'Label: `{preds["label"]}`, Score: {preds["score"]:.4f}')
 
 
 with tab2:
@@ -142,54 +128,36 @@ with tab2:
     if file_input:
         try:
             df = pd.read_csv(file_input)
+            texts = df['text'].to_list()
         except:
             st.write('Bad File Error...')
 
         st.write(f"First 5 rows of {file_input.name}")
-        st.write(df.head())
+        st.write(texts[:5])
 
         submit_button = st.button(label='Submit file')
         if submit_button:
             with st.spinner('Predicting ...'):
                 start_time = time.time()
                 time.sleep(2)
-                preds, preds_prob = classifier.predict(text_input)
+                preds = classifier(texts)
                 end_time = time.time()
                 p_time = round(end_time-start_time, 2)
                 st.success(f'Prediction finished in {p_time}s!')
 
-                label2id = {0: 'Positive', 1: 'Negative'}
-                flag = True
-                # st.write(f'Label: {label2id[preds]}, with certainty: {preds_prob}')
-                # st.write(f'Prob: {preds_prob}')
-
-            results = [["keybert library", 0.4704, 1],
-                    ["keyword extractor", 0.4535, 1],
-                    ["extractor app", 0.4334, 1],
-                    ["bert keyword", 0.4125, 1],
-                    ["amazing keybert", 0.4066, 1],
-                    ["app is", 0.3821, 1],
-                    ["interface built", 0.3249, 1],
-                    ["easy to", 0.3171, 1],
-                    ["streamlit for", 0.3087, 1],
-                    ["maarten grootendorst", 0.2766, 1]]
-
+                for text, pred in zip(texts, preds):
+                    pred['text'] = text
 
             c1, c2 = st.columns([3, 1])
             with c1:
                 st.subheader("🎈 Check & download results")
             with c2:
-                CSVButton2 = download_button(results, "Data.csv", "📥 Download (.csv)")
-            flag = True
+                CSVButton2 = download_button(preds, "sentiment-analysis-preds.csv", "📥 Download (.csv)")
 
             st.header("")
 
-            df = (
-                DataFrame(results, columns=["Text", "Prob", "Label"])
-                .sort_values(by="Prob", ascending=False)
-                .reset_index(drop=True)
-            )
-            df.index += 1
+
+            df = pd.DataFrame(preds, columns=['text', 'label', 'score'])
 
             import seaborn as sns
             # Add styling
@@ -197,42 +165,7 @@ with tab2:
             cmRed = sns.light_palette("red", as_cmap=True)
             df = df.style.background_gradient(
                 cmap=cmGreen,
-                subset=["Prob"],
+                subset=["score"],
             )
 
-            df = df.format({"Prob": "{:.2}"})
             st.table(df)
-
-
-
-
-
-# with st.form(key="my_form"):
-#
-#
-#     ce, c1, ce, c2, c3 = st.columns([0.07, 1, 0.07, 5, 0.07])
-#     with c1:
-#         ModelType = st.radio(
-#             "Choose your model",
-#             ['XLM-RoBERTa', 'ParsBERT', 'ALBERT'],
-#             help="At present, you can choose between 2 models (Flair or DistilBERT) to embed your text.",
-#         )
-#
-#         Diversity = st.slider(
-#             "Keyword diversity (MMR only)",
-#             value=0.5,
-#             min_value=0.0,
-#             max_value=1.0,
-#             step=0.1,
-#             help="""The higher the setting, the more diverse the keywords.
-#
-#             Note that the *Keyword diversity* slider only works if the *MMR* checkbox is ticked.
-#             """,
-#         )
-#
-#     with c2:
-#         doc = st.text_area(
-#             "Paste your text below (max 256 words)",
-#         )
-#         submit_button = st.form_submit_button(label="✨ Get me the data!")
-
